@@ -1,5 +1,6 @@
 import numpy as np
 import math
+import copy
 
 pi = math.pi
 
@@ -12,6 +13,7 @@ z = np.array([0, 0, 1])
 baseset = {
     'position': np.array([0, 0, 0], dtype=np.float),
     'toward': np.array([math.cos(pi/4), math.sin(pi/4), 0], dtype=np.float),
+    'normal': np.array([0, 0, 1], dtype=np.float),
     'trans_matrix': np.array([[math.cos(pi/4), math.cos(pi*3/4), 0],
                               [math.cos(pi/4), math.cos(pi/4), 0],
                               [0, 0, 1]], dtype=np.float),
@@ -22,7 +24,8 @@ baseset = {
 
 
 def vector_angle(a, b):
-    return sum(a * b) / (math.sqrt(sum(a * a)) * math.sqrt(sum(b * b)))
+    cos = sum(a * b) / (math.sqrt(sum(a * a)) * math.sqrt(sum(b * b)))
+    return np.clip(cos, -1, 1)
 
 
 def unitization(a):
@@ -35,11 +38,13 @@ def unitization(a):
 class UCAVs(object):
     def __init__(self, init_states=None):
         if init_states is None:
-            init_states = baseset
+            init_states = copy.deepcopy(baseset)
         self.init_pos = init_states['position']
         self.pos = self.init_pos  # 飞机位置是一个三维数组
         self.init_tow = init_states['toward']
         self.tow = self.init_tow  # 飞机朝向是一个三维数组，表示飞机朝向的方向向量
+        self.init_nor = init_states['normal']
+        self.nor = self.init_nor
         self.init_vel = init_states['velocity']
         self.vel = 0.
         self.init_oil = init_states['oil']
@@ -58,6 +63,7 @@ class UCAVs(object):
     def reset(self):
         self.pos = self.init_pos
         self.tow = self.init_tow
+        self.nor = self.init_nor
         self.vel = self.init_vel
         self.oil = self.init_oil
         self.mis_num = self.init_mis_num
@@ -65,7 +71,7 @@ class UCAVs(object):
         self.mis = []
 
     def launch(self, delta):
-        if delta == 1:
+        if delta == 1 and self.mis_num >= 0:
             self.mis_num -= 1
             self.mis.append(missile(self.pos, self.tow, self.vel))
 
@@ -81,6 +87,7 @@ class UCAVs(object):
         self.trans_matrix[2][0] = vector_angle(z, x1)
         self.trans_matrix[2][2] = vector_angle(z, z1)
         self.tow = unitization(x1)
+        self.nor = unitization(z1)
 
     def roll(self, delta):
         y0 = np.array([0, 1, math.tan(delta)])
@@ -93,12 +100,14 @@ class UCAVs(object):
         self.trans_matrix[1][2] = vector_angle(y, z1)
         self.trans_matrix[2][1] = vector_angle(z, y1)
         self.trans_matrix[2][2] = vector_angle(z, z1)
+        self.nor = unitization(z1)
 
     def yaw(self, delta):
         pass
 
     def velocity_change(self, delta):
         self.vel += delta
+        self.vel = max(self.vel, 0)
 
     def oil_change(self):
         self.oil -= self.vel * 0.01
